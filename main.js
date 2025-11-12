@@ -10,11 +10,6 @@ const renderer = new THREE.WebGLRenderer();
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
-const geometry = new THREE.BoxGeometry(1, 1, 1);
-const material = new THREE.MeshBasicMaterial( { color: 0x00ff00 } );
-const cube = new THREE.Mesh(geometry, material);
-scene.add(cube);
-
 camera.position.z = 5;
 
 let isHovered = false;
@@ -22,16 +17,54 @@ let isHovered = false;
 // Create an array to store all interactive objects
 const interactiveObjects = [];
 
-// Add the cube to the array
-interactiveObjects.push(cube);
-
 // Example: Add another object
 const sphereGeometry = new THREE.SphereGeometry(0.5, 32, 32);
 const sphereMaterial = new THREE.MeshBasicMaterial({ color: 0x0000ff });
 const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
-sphere.position.set(2, 0, 0);
-scene.add(sphere);
-interactiveObjects.push(sphere);
+
+// Create star systems
+const starSystems = [];
+const starColors = [0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0xff00ff];
+const starPositions = [
+    new THREE.Vector3(-5, 0, 0),
+    new THREE.Vector3(5, 0, 0),
+    new THREE.Vector3(0, 5, 0),
+    new THREE.Vector3(0, -5, 0),
+    new THREE.Vector3(0, 0, -5)
+];
+
+starPositions.forEach((position, index) => {
+    const starGeometry = new THREE.SphereGeometry(0.5, 32, 32);
+    const starMaterial = new THREE.MeshBasicMaterial({ color: starColors[index] });
+    const star = new THREE.Mesh(starGeometry, starMaterial);
+    star.position.copy(position);
+    scene.add(star);
+    starSystems.push(star);
+});
+
+// Create hyperlanes (connections between star systems)
+function createHyperlane(star1, star2) {
+    const points = [
+        star1.position.clone(),
+        star2.position.clone()
+    ];
+
+    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+    const material = new THREE.LineBasicMaterial({ color: 0xffffff });
+    const line = new THREE.Line(geometry, material);
+    scene.add(line);
+}
+
+// Define connections (hyperlanes)
+createHyperlane(starSystems[0], starSystems[1]);
+createHyperlane(starSystems[1], starSystems[2]);
+createHyperlane(starSystems[2], starSystems[3]);
+createHyperlane(starSystems[3], starSystems[4]);
+createHyperlane(starSystems[0], starSystems[4]);
+
+// Adjust camera to view the cluster
+camera.position.set(0, 0, 10);
+camera.lookAt(0, 0, 0);
 
 // Create a div for displaying text
 const hoverText = document.createElement('div');
@@ -43,10 +76,6 @@ hoverText.style.borderRadius = '5px';
 hoverText.style.display = 'none';
 hoverText.style.pointerEvents = 'none';
 document.body.appendChild(hoverText);
-
-// Assign unique text to objects
-cube.userData.text = 'This is a cube';
-sphere.userData.text = 'This is a sphere';
 
 function onMouseMove(event) {
     // Calculate normalized device coordinates (NDC) for the mouse position
@@ -105,6 +134,38 @@ let isMouseDown = false;
 let lastMouseX = 0;
 let lastMouseY = 0;
 
+// Define a target point for the camera to look at
+const cameraTarget = new THREE.Vector3(0, 0, 0);
+
+function updateCameraRotation(deltaX, deltaY) {
+    // Adjust the camera's rotation directly based on mouse movement
+    camera.rotation.y -= deltaX * 0.002; // Horizontal rotation
+    camera.rotation.x -= deltaY * 0.002; // Vertical rotation
+
+    // Clamp the vertical rotation to prevent flipping
+    // camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, camera.rotation.x));
+}
+
+function updateCameraRotationWithKeys() {
+    if (keys['ArrowLeft']) {
+        camera.rotation.y += 0.02; // Rotate left
+    }
+    if (keys['ArrowRight']) {
+        camera.rotation.y -= 0.02; // Rotate right
+    }
+    if (keys['ArrowUp']) {
+        camera.rotation.x += 0.02; // Rotate up
+        // camera.rotation.z = Math.min(camera.rotation.x, Math.PI / 2); // Clamp rotation
+    }
+    if (keys['ArrowDown']) {
+        camera.rotation.x -= 0.02; // Rotate down
+        console.log(camera.rotation.x);
+        console.log(camera.rotation.y);
+        console.log(camera.rotation.z);
+        // camera.rotation.z = Math.max(camera.rotation.x, -Math.PI / 2); // Clamp rotation
+    }
+}
+
 // Event listeners for mouse down and up
 window.addEventListener('mousedown', (event) => {
     isMouseDown = true;
@@ -121,9 +182,8 @@ window.addEventListener('mousemove', (event) => {
         const deltaX = event.clientX - lastMouseX;
         const deltaY = event.clientY - lastMouseY;
 
-        // Adjust camera rotation based on mouse movement
-        camera.rotation.y -= deltaX * 0.002; // Horizontal rotation
-        camera.rotation.x -= deltaY * 0.002; // Vertical rotation
+        // Update camera rotation relative to the target
+        updateCameraRotation(deltaX, deltaY);
 
         lastMouseX = event.clientX;
         lastMouseY = event.clientY;
@@ -132,15 +192,11 @@ window.addEventListener('mousemove', (event) => {
 
 setupMouseEvents();
 
-// Create a new scene for transitioning inside objects
-const objectScenes = new Map();
-objectScenes.set(cube, createCubeScene());
-objectScenes.set(sphere, createSphereScene());
-
 function renderScene(sceneToRender) {
     renderer.setAnimationLoop(() => {
         // Update camera position based on input
         updateCameraPosition();
+        updateCameraRotationWithKeys();
 
         // Render the provided scene
         renderer.render(sceneToRender, camera);
@@ -185,12 +241,10 @@ function drawLineBetweenObjects(object1, object2) {
     scene.add(line);
 }
 
-// Draw a line between the cube and the sphere
-drawLineBetweenObjects(cube, sphere);
-
 function animate() {
     // Update camera position based on input
     updateCameraPosition();
+    updateCameraRotationWithKeys();
 
     // Update raycaster with the camera and mouse position
     raycaster.setFromCamera(mouse, camera);
@@ -225,9 +279,6 @@ function animate() {
     }
 
     renderer.render(scene, camera);
-
-    cube.rotation.x += 0.01;
-    cube.rotation.y += 0.01;
 }
 
 renderer.setAnimationLoop(animate);
